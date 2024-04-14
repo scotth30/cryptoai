@@ -13,7 +13,7 @@ def calculate_trades(balance, df):
     
     total_pnl = 0  # Variable to keep track of the running total profit and loss (P&L).
 
-    # Iterate over defined number of prediction models (here, implied to be 8).
+    # Iterate over defined number of prediction model sets per cryptocurrency (here, implied to be 8).
     for i in range(8):
         close_col = f'close_{i}'
         high_col = f'high_{i}'
@@ -28,14 +28,15 @@ def calculate_trades(balance, df):
             # Iterate over each row in the dataframe to process trades based on predictions.
             for j in range(len(df) - 1):
                 # If the predicted close is higher than the current close, a potential trade is considered.
-                if predicted_close[j] > current_close[j]:
+
+                if predicted_close[j] > current_close[j] * 1.01:
                     predicted_range = predicted_high[j] - predicted_low[j]
-                    buypoint = predicted_low[j] + (predicted_range * 0.05)  # Set buy point at 5% above the predicted low.
+                    buypoint = current_close[j] + (predicted_range * 0.05)  # Set buy point at 5% above the predicted low.
                     sellpoint = predicted_high[j] - (predicted_range * 0.05)  # Set sell point at 5% below the predicted high.
 
                     # Check if the index for the next period is within the dataframe bounds.
                     if j + 1 < len(df):
-                        # If predicted conditions are met during the next period, perform trade calculations.
+                        # If predicted conditions are met during the next period, perform trade calculations, otherwise the trade is skipped
                         if buypoint >= current_low[j+1]:
                             # Shift to get the next period's close, high, and low for calculations.
                             next_close = current_close[j+1]
@@ -50,7 +51,7 @@ def calculate_trades(balance, df):
 
 # Function to calculate net P&L and balance for each trade based on given parameters.
 def calculate_net_pnl(balance, buypoint, sellpoint, current_close, next_high, next_close, next_low):
-    amount_to_trade = balance * 0.01  # Decide the trade amount, which is 1% of the current balance.
+    amount_to_trade = balance * 0.03  # Decide the trade amount, which is 5% of the current balance.
     amount_purchased = amount_to_trade / buypoint  # Calculate the amount of cryptocurrency purchased.
     kraken_buy_fee = amount_to_trade * 0.0016  # Assume a buy fee from the Kraken exchange.
 
@@ -58,15 +59,17 @@ def calculate_net_pnl(balance, buypoint, sellpoint, current_close, next_high, ne
     if next_high >= sellpoint:
         sell_price = sellpoint  # Sell at the sell point.
         kraken_sell_fee = amount_purchased * sell_price * 0.0016
-        net_pnl = (amount_purchased * sell_price) - kraken_buy_fee - kraken_sell_fee
+        total_purchase_cost = amount_purchased * buypoint  # Total cost of the purchased asset
+        net_pnl = (amount_purchased * sell_price) - kraken_buy_fee - kraken_sell_fee - total_purchase_cost
     else:
         sell_price = next_close  # If the sell point was not reached, sell at the close price of the next period.
-        kraken_sell_fee = amount_purchased * sell_price * 0.0016
-        net_pnl = (amount_purchased * sell_price) - kraken_buy_fee - kraken_sell_fee
+        kraken_sell_fee = amount_purchased * sell_price * 0.0026
+        total_purchase_cost = amount_purchased * buypoint  # Total cost of the purchased asset
+        net_pnl = (amount_purchased * sell_price) - kraken_buy_fee - kraken_sell_fee - total_purchase_cost
 
     balance += net_pnl  # Update the balance with the net P&L from the trade.
 
-    return net_pnl, balance  # Return the net profit or loss from the trade and the updated balance.
+    return net_pnl, balance 
 
 # Function to calculate P&L for each CSV file for a single set of trading models.
 def calculate_pnl_per_set(input_dir, output_directory):
